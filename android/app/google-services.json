@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "597476018138",
+    "project_id": "carcount-4d874",
+    "storage_bucket": "carcount-4d874.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:597476018138:android:6d75eb0c4377a603f0e2e3",
+        "android_client_info": {
+          "package_name": "com.example.carcount"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLsXK7Au08A-ozcj57IDipn6eykUqejsE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
