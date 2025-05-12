@@ -132,11 +132,6 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 15),
 
-              // sign in button
-              /*MyButton(
-                onTap: signIn, 
-                text: "Iniciar sesión",
-              ),*/
 
               SizedBox(
                 width: 150,
@@ -168,22 +163,6 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               )
 
-              /*Row(
-                children: [
-                  GestureDetector(
-                    onTap: widget.onTap,
-                    child: const Text(
-                      "Crear una cuenta",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                        decoration: TextDecoration.underline,
-                        decorationThickness: 2.0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),*/
             ],
           ),
         ),

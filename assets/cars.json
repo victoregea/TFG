@@ -1,0 +1,19 @@
+[
+    {
+        "modelo": "Audi A4",
+        "minimo": 5.2,
+        "maximo": 6.0
+    },
+
+    {
+        "modelo": "Volkswagen T-Roc",
+        "minimo": 5.1,
+        "maximo": 5.2
+    },
+
+    {
+        "modelo": "Jeep Compass",
+        "minimo": 7.7,
+        "máximo": 7.8
+    }
+]

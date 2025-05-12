@@ -1,10 +1,9 @@
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:carcount/components/dropDownButton.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
-import '../components/button.dart';
-import '../components/text_field.dart';
 
 class RegisterPage extends StatefulWidget {
   final Function()? onTap;
@@ -15,66 +14,68 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  // Text editing controllers
   final emailTextController = TextEditingController();
   final passwordTextController = TextEditingController();
   final confirmPasswordTextController = TextEditingController();
   final userNameController = TextEditingController();
-  final carController = TextEditingController();
+  List<Map<String, dynamic>> cars = [];
   String? selectedCar;
 
-  // Registrar usuario
+  @override
+  void initState() {
+    super.initState();
+    loadCars();
+  }
+
+  Future<void> loadCars() async {
+    String jsonString = await rootBundle.loadString('assets/cars.json');
+    List<dynamic> jsonData = json.decode(jsonString);
+    setState(() {
+      cars = jsonData.cast<Map<String, dynamic>>();
+    });
+  }
+
   void signUp() async {
-    // Circulo de carga
     showDialog(
       context: context,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    // Comprobar contraseña
     if (passwordTextController.text != confirmPasswordTextController.text) {
       Navigator.pop(context);
       displayMessage("Las contraseñas no coinciden");
       return;
     }
 
+    if (selectedCar == null) {
+      Navigator.pop(context);
+      displayMessage("Selecciona un coche");
+      return;
+    }
+
     try {
-      // Crear un usuario
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
               email: emailTextController.text,
               password: passwordTextController.text);
 
-      // Crear un nuevo doc en firestore despues de crear un usuario
       FirebaseFirestore.instance
           .collection("Usuarios")
           .doc(userCredential.user!.email)
           .set({
-        'Nombre de usuario': userNameController.text, // Nombre inicial
+        'Nombre de usuario': userNameController.text,
         'Coche': selectedCar,
-        'email': emailTextController.text, // Coche inicial
+        'email': emailTextController.text,
+        'Contactos': []
       });
 
       if (context.mounted) Navigator.pop(context);
-    } on FirebaseAuthException catch (e) {
+    } catch (e) {
       Navigator.pop(context);
-      displayMessage(e.code);
+      displayMessage(e.toString());
     }
-
-    // Añadir los datos de ususario
   }
 
-  Future addUserDetails(String userName, String car, String email) async {
-    await FirebaseFirestore.instance.collection('Usuarios').add({
-      'Nombre de usuario': userName,
-      'Coche': car,
-      'email': email,
-    });
-  }
-
-  // Mensaje de error
   void displayMessage(String message) {
     showDialog(
       context: context,
@@ -86,195 +87,116 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    List listaDeCoches = ['BMW', 'Mercedes', 'Toyota', 'Seat'];
-
     return Scaffold(
-        backgroundColor: Colors.white,
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF2274A5),
-                Color(0xFF2274A5),
+      backgroundColor: Colors.white,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2274A5), Color(0xFF2274A5)],
+          ),
+        ),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            margin: const EdgeInsets.symmetric(horizontal: 50, vertical: 110),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  "Crear cuenta",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+                ),
+                const SizedBox(height: 40),
+                TextField(
+                  controller: userNameController,
+                  decoration: _inputDecoration("Nombre de usuario", Icons.person),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: emailTextController,
+                  decoration: _inputDecoration("Correo electrónico", Icons.email),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passwordTextController,
+                  obscureText: true,
+                  decoration: _inputDecoration("Contraseña", Icons.lock),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: confirmPasswordTextController,
+                  obscureText: true,
+                  decoration: _inputDecoration("Confirmar contraseña", Icons.lock),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  decoration: _inputDecoration("Selecciona un coche", Icons.directions_car),
+                  value: selectedCar,
+                  items: cars.map((car) {
+                    return DropdownMenuItem<String>(
+                      value: car["modelo"],
+                      child: Text(car["modelo"]),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedCar = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 15),
+                SizedBox(
+                  width: 150,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2274A5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    onPressed: signUp,
+                    child: const Text("Registrarse", style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Text("¿Ya tienes una cuenta?", style: TextStyle(fontWeight: FontWeight.bold)),
+                TextButton(
+                  onPressed: widget.onTap,
+                  child: const Text(
+                    "Iniciar sesión",
+                    style: TextStyle(color: Color(0xFF2274A5), fontWeight: FontWeight.bold),
+                  ),
+                )
               ],
             ),
           ),
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              margin: const EdgeInsets.symmetric(horizontal: 50, vertical: 110),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    "Crear cuenta",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24,
-                    ),
-                  ),
+        ),
+      ),
+    );
+  }
 
-                  const SizedBox(height: 40),
-
-                  // Nombre de usuario textfiel
-                  /*MyTextField(
-                      controller: userNameController,
-                      hintText: 'Escribe un nombre de usuario',
-                      obscureText: false),*/
-
-                  TextField(
-                    controller: userNameController,
-                    obscureText: false,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.person, color: Colors.grey),
-                      hintText: 'Nombre de usuario',
-                      filled: true,
-                      fillColor: Colors.grey[350],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(50),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // email textfiel
-                  /*MyTextField(
-                      controller: emailTextController,
-                      hintText: 'Escribe tu Email',
-                      obscureText: false),*/
-
-                  TextField(
-                    controller: emailTextController,
-                    obscureText: false,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.email, color: Colors.grey),
-                      hintText: 'Correo electrónico',
-                      filled: true,
-                      fillColor: Colors.grey[350],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(50),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // password
-                  /*MyTextField(
-                    controller: passwordTextController,
-                    hintText: 'Escribe tu contraseña',
-                    obscureText: true,
-                  ),*/
-
-                  TextField(
-                    controller: passwordTextController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock, color: Colors.grey),
-                      hintText: 'Contraseña',
-                      filled: true,
-                      fillColor: Colors.grey[350],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(50),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // confirm password
-                  /*MyTextField(
-                    controller: confirmPasswordTextController,
-                    hintText: 'Escribe de nuevo la contraseña',
-                    obscureText: true,
-                  ),*/
-
-                  TextField(
-                    controller: confirmPasswordTextController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock, color: Colors.grey),
-                      hintText: 'Confirmar contraseña',
-                      filled: true,
-                      fillColor: Colors.grey[350],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(50),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Nombre de usuario textfiel
-                  /*MyTextField(
-                      controller: carController,
-                      hintText: 'Selecciona un coche',
-                      obscureText: false),*/
-
-                  MyDropButton(
-                    hintText: 'Selecciona un cccoche',
-                    onCarSelected: (car) {
-                      selectedCar = car; // Guardamos el coche seleccionado
-                    },
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  // Boton registrarse
-                  //MyButton(onTap: signUp, text: "Registrarse"),
-                  SizedBox(
-                    width: 150,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2274A5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      onPressed: signUp,
-                      child: const Text(
-                        'Registrarse',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 15),
-                  Text(
-                    '¿Ya tienes una cuenta?',
-                    style: TextStyle(fontWeight: FontWeight.bold,)
-                  ),
-
-                  TextButton(
-                    onPressed: widget.onTap,
-                    child: const Text(
-                      'Iniciar sesión',
-                      style: TextStyle(
-                        color: Color(0xFF2274A5),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            ),
-          ),
-        ));
+  InputDecoration _inputDecoration(String hintText, IconData icon) {
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: Colors.grey),
+      hintText: hintText,
+      filled: true,
+      fillColor: Colors.grey[350],
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(50),
+        borderSide: BorderSide.none,
+      ),
+    );
   }
 }

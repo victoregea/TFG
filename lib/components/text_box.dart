@@ -31,12 +31,7 @@ class MyTextBox extends StatelessWidget {
             children: [
               Text(sectionName, style: TextStyle(color: Colors.grey[700]),),
 
-              IconButton(
-                onPressed: onPressed, 
-                icon: Icon(
-                  Icons.edit
-                ),
-              ),
+              
             ],
           ),
 

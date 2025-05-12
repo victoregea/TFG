@@ -18,7 +18,10 @@ class Groups extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => groupInformationPage(),
+            builder: (context) => GroupInformationPage(
+              groupName: name,
+              groupId: groupId,
+            ),
           ),
         );
       },
