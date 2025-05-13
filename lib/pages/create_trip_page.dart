@@ -39,17 +39,14 @@ class _CreateTripPageState extends State<CreateTripPage> {
 
   Future<void> loadUsersInGroup() async {
     final snapshot = await FirebaseFirestore.instance.collection("Usuarios").get();
-
     for (var doc in snapshot.docs) {
       final data = doc.data();
       final grupos = List.from(data['Grupos'] ?? []);
-
       final pertenece = grupos.any((g) => g['GroupId'] == widget.groupId);
       if (pertenece) {
         usersInGroup[doc.id] = data;
       }
     }
-
     setState(() {});
   }
 
@@ -62,21 +59,26 @@ class _CreateTripPageState extends State<CreateTripPage> {
   }
 
   void calculateCost() {
-    if (selectedConductor != null) {
+    if (selectedConductor != null && kilometers > 0) {
       final userData = usersInGroup[selectedConductor];
       final modelo = userData['Coche'];
       final carInfo = carsData[modelo];
       if (carInfo != null) {
         final minimo = carInfo['minimo'] ?? 0;
+        final maximo = carInfo['maximo'] ?? 0;
+        final media = ((minimo + maximo) / 2);
+        final costPerKm = media * 1.666 / 100;
         setState(() {
-          calculatedCost = kilometers * minimo;
+          calculatedCost = kilometers * costPerKm;
         });
       }
     }
   }
 
   Future<void> saveTrip() async {
-    if (!_formKey.currentState!.validate() || selectedConductor == null || selectedPassengers.isEmpty) return;
+    if (!_formKey.currentState!.validate() ||
+        selectedConductor == null ||
+        selectedPassengers.isEmpty) return;
 
     final tripData = {
       "titulo": title,
@@ -136,6 +138,7 @@ class _CreateTripPageState extends State<CreateTripPage> {
                         onChanged: (value) {
                           setState(() {
                             selectedConductor = value;
+                            selectedPassengers.remove(value); // Evita conductor como pasajero
                             calculateCost();
                           });
                         },
@@ -144,7 +147,7 @@ class _CreateTripPageState extends State<CreateTripPage> {
                       const SizedBox(height: 20),
                       const Text("Pasajeros", style: TextStyle(fontWeight: FontWeight.bold)),
                       Column(
-                        children: usersInGroup.keys.map((email) {
+                        children: usersInGroup.keys.where((email) => email != selectedConductor).map((email) {
                           final username = usersInGroup[email]['Nombre de usuario'] ?? email;
                           return CheckboxListTile(
                             title: Text(username),

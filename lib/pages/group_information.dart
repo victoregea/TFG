@@ -1,4 +1,6 @@
 import 'package:carcount/pages/create_trip_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class GroupInformationPage extends StatefulWidget {
@@ -17,11 +19,88 @@ class GroupInformationPage extends StatefulWidget {
 
 class _GroupInformationPageState extends State<GroupInformationPage> {
   int selectedIndex = 0;
-
-  // Listas vacías por defecto
   final List<Map<String, dynamic>> trips = [];
+  final List<Map<String, dynamic>> balances = [];
 
-  final List<Map<String, String>> balances = [];
+  Map<String, dynamic> usersInGroup = {};
+
+  @override
+  void initState() {
+    super.initState();
+    loadUsersAndTrips();
+  }
+
+  Future<void> loadUsersAndTrips() async {
+    final usersSnapshot =
+        await FirebaseFirestore.instance.collection("Usuarios").get();
+    final groupUsers = <String, dynamic>{};
+
+    for (var doc in usersSnapshot.docs) {
+      final userData = doc.data();
+      final grupos = List.from(userData['Grupos'] ?? []);
+      if (grupos.any((g) => g['GroupId'] == widget.groupId)) {
+        groupUsers[doc.id] = userData;
+      }
+    }
+
+    setState(() {
+      usersInGroup = groupUsers;
+    });
+
+    await loadTrips(groupUsers);
+  }
+
+  Future<void> loadTrips(Map<String, dynamic> users) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection("Grupos")
+        .doc(widget.groupId)
+        .collection("Trayectos")
+        .orderBy("fecha", descending: true)
+        .get();
+
+    final tripGroups = <String, List<Map<String, dynamic>>>{};
+
+    for (var doc in snapshot.docs) {
+      final trip = doc.data();
+      final fecha = trip['fecha']?.substring(0, 10) ?? 'Sin fecha';
+
+      final conductorId = trip['conductor'];
+      final pasajeros = List<String>.from(trip['pasajeros'] ?? []);
+      final usuarios = [conductorId, ...pasajeros];
+      final costeTotal = (trip['coste'] ?? 0).toDouble();
+      final costePorPersona = costeTotal / usuarios.length;
+
+      // Balance interno por trayecto (solo si pasajero != conductor)
+      for (final pasajero in pasajeros) {
+        if (pasajero != conductorId) {
+          balances.add({
+            'from': pasajero,
+            'to': conductorId,
+            'amount': costePorPersona,
+          });
+        }
+      }
+
+      tripGroups[fecha] = tripGroups[fecha] ?? [];
+      tripGroups[fecha]!.add({
+        'title': trip['titulo'],
+        'conductor': users[conductorId]?['Nombre de usuario'] ?? conductorId,
+        'amount': '${trip['coste']?.toStringAsFixed(2) ?? "0.00"} €',
+      });
+    }
+
+    final sortedTrips = tripGroups.entries.toList()
+      ..sort((a, b) => b.key.compareTo(a.key));
+
+    final formattedTrips = sortedTrips
+        .map((entry) => {'date': entry.key, 'items': entry.value})
+        .toList();
+
+    setState(() {
+      trips.clear();
+      trips.addAll(formattedTrips);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,8 +157,8 @@ class _GroupInformationPageState extends State<GroupInformationPage> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF2274A5),
         child: const Icon(Icons.add),
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => CreateTripPage(
@@ -88,6 +167,12 @@ class _GroupInformationPageState extends State<GroupInformationPage> {
               ),
             ),
           );
+          // Refrescar datos al volver de CreateTripPage
+          setState(() {
+            trips.clear();
+            balances.clear();
+          });
+          await loadUsersAndTrips();
         },
       ),
     );
@@ -169,38 +254,97 @@ class _GroupInformationPageState extends State<GroupInformationPage> {
   }
 
   Widget _buildBalanceView() {
-    // Si la lista de balances está vacía, no mostramos nada
-    if (balances.isEmpty) return const SizedBox.shrink();
+    if (balances.isEmpty) {
+      return const Center(
+        child:
+            Text("No hay deudas registradas", style: TextStyle(fontSize: 16)),
+      );
+    }
 
-    return ListView.builder(
+    final currentUserId = FirebaseAuth.instance.currentUser!.email;
+    final Map<String, double> netBalances = {};
+
+    for (var balance in balances) {
+      final from = balance['from'];
+      final to = balance['to'];
+      final amount = balance['amount'];
+
+      final key = '$from|$to';
+      final reverseKey = '$to|$from';
+
+      if (netBalances.containsKey(reverseKey)) {
+        netBalances[reverseKey] = netBalances[reverseKey]! - amount;
+      } else {
+        netBalances[key] = (netBalances[key] ?? 0) + amount;
+      }
+    }
+
+    // Filtrar solo deudas netas > 0
+    final filteredBalances =
+        netBalances.entries.where((e) => e.value > 0).toList();
+
+    if (filteredBalances.isEmpty) {
+      return const Center(
+        child: Text("No hay deudas pendientes", style: TextStyle(fontSize: 16)),
+      );
+    }
+
+    return ListView(
       padding: const EdgeInsets.all(15),
-      itemCount: balances.length,
-      itemBuilder: (context, index) {
-        final balance = balances[index];
+      children: filteredBalances.map((entry) {
+        final parts = entry.key.split('|');
+        final from = parts[0];
+        final to = parts[1];
+        final amount = entry.value;
+
+        final fromName = usersInGroup[from]?['Nombre de usuario'] ?? from;
+        final toName = usersInGroup[to]?['Nombre de usuario'] ?? to;
+
         return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          child: RichText(
-            text: TextSpan(
-              style: const TextStyle(color: Colors.black, fontSize: 16),
-              children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
                 TextSpan(
-                    text: '${balance['from']} ',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const TextSpan(text: 'debe a '),
-                TextSpan(
-                    text: '${balance['to']} ',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                TextSpan(text: '${balance['amount']}'),
-              ],
-            ),
+                  children: [
+                    TextSpan(
+                        text: fromName,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const TextSpan(text: ' debe a '),
+                    TextSpan(
+                      text: to == currentUserId ? '$toName (me)' : toName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "€ ${amount.toStringAsFixed(2)}",
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
           ),
         );
-      },
+      }).toList(),
     );
   }
 }

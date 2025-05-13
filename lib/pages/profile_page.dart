@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:carcount/components/text_box.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,6 +15,21 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final currentUser = FirebaseAuth.instance.currentUser!;
   final usersCollection = FirebaseFirestore.instance.collection("Usuarios");
+  List<String> carModels = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadCarModels();
+  }
+
+  Future<void> loadCarModels() async {
+    final String data = await rootBundle.loadString('assets/cars.json');
+    final List<dynamic> jsonResult = jsonDecode(data);
+    setState(() {
+      carModels = jsonResult.map((car) => car['modelo'] as String).toList();
+    });
+  }
 
   void signOut() {
     FirebaseAuth.instance.signOut();
@@ -28,25 +45,93 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  void editField(String fieldName, String currentValue) async {
+    final controller = TextEditingController(text: currentValue);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Editar $fieldName"),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(hintText: "Nuevo $fieldName"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await usersCollection.doc(currentUser.email).update({
+                fieldName: controller.text,
+              });
+              Navigator.pop(context);
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void editCar(String currentCar) async {
+    String selectedCar = currentCar;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Selecciona tu coche"),
+        content: DropdownButton<String>(
+          value: selectedCar,
+          isExpanded: true,
+          items: carModels.map((model) {
+            return DropdownMenuItem<String>(
+              value: model,
+              child: Text(model),
+            );
+          }).toList(),
+          onChanged: (newValue) {
+            if (newValue != null) {
+              setState(() {
+                selectedCar = newValue;
+              });
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await usersCollection.doc(currentUser.email).update({
+                'Coche': selectedCar,
+              });
+              Navigator.pop(context);
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF2274A5),
+      backgroundColor: const Color(0xFF2274A5),
       appBar: AppBar(
         backgroundColor: const Color(0xFF2274A5),
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
-        title: const Text(
-          "Perfil",
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text("Perfil", style: TextStyle(color: Colors.white)),
       ),
       body: Column(
         children: [
           Container(
-            color: Color(0xFF2274A5),
+            color: const Color(0xFF2274A5),
             padding: const EdgeInsets.only(top: 50, bottom: 30),
             width: double.infinity,
             child: Column(
@@ -56,8 +141,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 Text(
                   currentUser.email!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 18),
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ],
             ),
@@ -66,18 +150,15 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(30),
-                  topRight: Radius.circular(30),
-                ),
+                borderRadius:
+                    BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
               ),
               child: StreamBuilder<DocumentSnapshot>(
                 stream: usersCollection.doc(currentUser.email).snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.hasData) {
-                    final userData =
-                        snapshot.data!.data() as Map<String, dynamic>;
-                    List<dynamic> contactos = userData['Contactos'] ?? [];
+                    final userData = snapshot.data!.data() as Map<String, dynamic>;
+                    final contactos = userData['Contactos'] ?? [];
 
                     return ListView(
                       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -87,10 +168,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Center(
                             child: Text(
                               'Información',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -98,12 +176,12 @@ class _ProfilePageState extends State<ProfilePage> {
                         MyTextBox(
                           text: userData['Nombre de usuario'],
                           sectionName: 'Nombre de usuario',
-                          onPressed: () {},
+                          onPressed: () => editField('Nombre de usuario', userData['Nombre de usuario']),
                         ),
                         MyTextBox(
                           text: userData['Coche'],
                           sectionName: 'Coche',
-                          onPressed: () {},
+                          onPressed: () => editCar(userData['Coche']),
                         ),
                         const SizedBox(height: 20),
                         Padding(
@@ -116,14 +194,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(15),
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                               ),
                               onPressed: signOut,
-                              child: const Text(
-                                'Cerrar sesión',
-                                style: TextStyle(color: Colors.white),
-                              ),
+                              child: const Text('Cerrar sesión', style: TextStyle(color: Colors.white)),
                             ),
                           ),
                         ),
@@ -133,30 +207,26 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Center(
                             child: Text(
                               'Contactos',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
                         const SizedBox(height: 10),
                         ListView.builder(
                           shrinkWrap: true,
-                          physics: NeverScrollableScrollPhysics(),
+                          physics: const NeverScrollableScrollPhysics(),
                           itemCount: contactos.length,
                           itemBuilder: (context, index) {
                             return FutureBuilder<DocumentSnapshot>(
                               future: usersCollection.doc(contactos[index]).get(),
                               builder: (context, contactSnapshot) {
                                 if (contactSnapshot.hasData) {
-                                  final contactData = contactSnapshot.data!.data()
-                                      as Map<String, dynamic>;
+                                  final contactData = contactSnapshot.data!.data() as Map<String, dynamic>;
                                   return ListTile(
                                     title: Text(contactData['Nombre de usuario']),
                                     subtitle: Text(contactData['email']),
                                     trailing: IconButton(
-                                      icon: Icon(Icons.remove_circle, color: Colors.red),
+                                      icon: const Icon(Icons.remove_circle, color: Colors.red),
                                       onPressed: () => removeContact(contactos[index]),
                                     ),
                                   );
